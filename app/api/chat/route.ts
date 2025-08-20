@@ -35,99 +35,34 @@ function streamFromString(text: string, delayMs = 10): ReadableStream<Uint8Array
 function resolveModel(selected?: string) {
   const name = (selected ?? "").trim();
 
-  // OpenAI models (latest 2025)
-  if (name === "o3" || name === "o4-mini" || name === "GPT-4.1" || name === "GPT-4.1 Mini" || name === "gpt-5" || name === "gpt-5-mini" || name === "gpt-5-nano") {
-    let modelId: string;
-    switch (name) {
-      case "gpt-5":
-        modelId = "gpt-5";
-        break;
-      case "gpt-5-mini":
-        modelId = "gpt-5-mini";
-        break;
-      case "gpt-5-nano":
-        modelId = "gpt-5-nano";
-        break;
-      case "o3":
-        modelId = "o3";
-        break;
-      case "o4-mini":
-        modelId = "o4-mini";
-        break;
-      case "GPT-4.1":
-        modelId = "gpt-4.1";
-        break;
-      case "GPT-4.1 Mini":
-        modelId = "gpt-4.1-mini";
-        break;
-      default:
-        modelId = "gpt-4o-mini";
-    }
-    return openai(modelId);
-  }
+  const modelMap: Record<string, () => any> = {
+    // OpenAI models
+    "gpt-5": () => openai("gpt-5"),
+    "gpt-5-mini": () => openai("gpt-5-mini"),
+    "gpt-5-nano": () => openai("gpt-5-nano"),
+    "o3": () => openai("o3"),
+    "o4-mini": () => openai("o4-mini"),
+    "GPT-4.1": () => openai("gpt-4.1"),
+    "GPT-4.1 Mini": () => openai("gpt-4.1-mini"),
+    
+    // Anthropic models
+    "Claude 4 Opus": () => anthropic("claude-4-opus-latest"),
+    "Claude 4 Sonnet": () => anthropic("claude-4-sonnet-latest"),
+    "Claude 3.5 Sonnet": () => anthropic("claude-3-5-sonnet-20241022"),
+    "Claude 3.5 Haiku": () => anthropic("claude-3-5-haiku-20241022"),
+    
+    // Google models
+    "Gemini 2.5 Pro": () => google("gemini-2.5-pro"),
+    "Gemini 2.5 Flash": () => google("gemini-2.5-flash"),
+    "Gemini 2.0 Flash": () => google("gemini-2.0-flash-exp"),
+    "Gemini 2.0 Flash Thinking": () => google("gemini-2.0-flash-thinking-exp"),
+    
+    // Groq models
+    "DeepSeek R1 Llama 70B": () => groq("deepseek-r1-distill-llama-70b"),
+    "Llama 3.3 70B": () => groq("llama-3.3-70b-versatile"),
+  };
 
-  // Anthropic models (latest 2025)
-  if (name === "Claude 4 Opus" || name === "Claude 4 Sonnet" || name === "Claude 3.5 Sonnet" || name === "Claude 3.5 Haiku") {
-    let modelId: string;
-    switch (name) {
-      case "Claude 4 Opus":
-        modelId = "claude-4-opus-latest";
-        break;
-      case "Claude 4 Sonnet":
-        modelId = "claude-4-sonnet-latest";
-        break;
-      case "Claude 3.5 Sonnet":
-        modelId = "claude-3-5-sonnet-20241022";
-        break;
-      case "Claude 3.5 Haiku":
-        modelId = "claude-3-5-haiku-20241022";
-        break;
-      default:
-        modelId = "claude-3-5-haiku-20241022";
-    }
-    return anthropic(modelId);
-  }
-
-  // Google models (latest 2025)
-  if (name === "Gemini 2.5 Pro" || name === "Gemini 2.5 Flash" || name === "Gemini 2.0 Flash" || name === "Gemini 2.0 Flash Thinking") {
-    let modelId: string;
-    switch (name) {
-      case "Gemini 2.5 Pro":
-        modelId = "gemini-2.5-pro";
-        break;
-      case "Gemini 2.5 Flash":
-        modelId = "gemini-2.5-flash";
-        break;
-      case "Gemini 2.0 Flash":
-        modelId = "gemini-2.0-flash-exp";
-        break;
-      case "Gemini 2.0 Flash Thinking":
-        modelId = "gemini-2.0-flash-thinking-exp";
-        break;
-      default:
-        modelId = "gemini-2.0-flash-exp";
-    }
-    return google(modelId);
-  }
-
-  // Groq models (latest 2025)
-  if (name === "DeepSeek R1 Llama 70B" || name === "Llama 3.3 70B") {
-    let modelId: string;
-    switch (name) {
-      case "DeepSeek R1 Llama 70B":
-        modelId = "deepseek-r1-distill-llama-70b";
-        break;
-      case "Llama 3.3 70B":
-        modelId = "llama-3.3-70b-versatile";
-        break;
-      default:
-        modelId = "llama-3.3-70b-versatile";
-    }
-    return groq(modelId);
-  }
-
-  // Fallback to OpenAI GPT-4.1 mini
-  return openai("gpt-4.1-mini");
+  return modelMap[name]?.() || openai("gpt-4o-mini");
 }
 
 export async function POST(req: Request) {
