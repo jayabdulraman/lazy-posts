@@ -17,38 +17,7 @@ interface Message {
   content: string;
 }
 
-function countChar(input: string, char: string) {
-  const normalized = input.toLowerCase();
-  return [...normalized].filter((c) => c === char.toLowerCase()).length;
-}
 
-function basicAnswer(prompt: string): string {
-  const q = prompt.trim();
-  const lower = q.toLowerCase();
-
-  if (/(how\s+does)\s+ai\s+work/.test(lower)) {
-    return "AI (artificial intelligence) uses statistical models trained on large datasets to recognize patterns and make predictions. Modern systems rely on neural networks with many layers (deep learning) that adjust millions of parameters to minimize error while learning from examples.";
-  }
-
-  if (/black\s+holes?\s+real/.test(lower)) {
-    return "Yes. Black holes are well-supported by observation: we have gravitational-wave detections of black-hole mergers (LIGO/Virgo) and direct imaging of the shadow of supermassive black holes (Event Horizon Telescope).";
-  }
-
-  if (/how\s+many\s+r\w*\s+.*strawberry/.test(lower) || /strawberry/.test(lower)) {
-    const num = countChar("strawberry", "r");
-    return `The word "strawberry" contains ${num} letter${num === 1 ? "" : "s"} \"r\".`;
-  }
-
-  if (/meaning\s+of\s+life/.test(lower)) {
-    return "42 — and, more practically, building meaning through relationships, curiosity, and contribution.";
-  }
-
-  if (lower.endsWith("?")) {
-    return "Great question. I don't have a live model connected yet in this starter, but here's a helpful starting point: break the problem down, identify assumptions, and test with a small example.";
-  }
-
-  return `You said: ${q}`;
-}
 
 function streamFromString(text: string, delayMs = 10): ReadableStream<Uint8Array> {
   const encoder = new TextEncoder();
@@ -309,10 +278,9 @@ export async function POST(req: Request) {
       const response = result.toTextStreamResponse();
       return response;
     } catch (providerError) {
-      // Provider not available or missing key; fall back to local simulated stream
-      const lastUser = msgs[msgs.length - 1]?.content ?? "";
-      const response = basicAnswer(lastUser);
-      return new Response(streamFromString(response), {
+      // Provider not available or missing key; return error message
+      const errorMessage = "Sorry, AI model is not available. Please check your API keys configuration.";
+      return new Response(streamFromString(errorMessage), {
         headers: { "content-type": "text/plain; charset=utf-8" },
       });
     }
