@@ -34,6 +34,11 @@ Lazy Posts transforms the T3Chat interface into a powerful Twitter automation to
 - Real-time streaming responses
 - Persistent chat threads
 
+## Demo
+
+[Watch the video]((https://www.loom.com/share/8667b968450a43f89681498aa29b2dc1?sid=82682afd-fa76-4a01-b04a-f4932ec935d7)
+
+
 ## 🏗️ Architecture
 
 ```mermaid
