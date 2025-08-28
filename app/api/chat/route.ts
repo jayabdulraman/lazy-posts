@@ -2,7 +2,7 @@
 // export const runtime = "edge";
 export const maxDuration = 30;
 
-import { streamText } from "ai";
+import { generateText, streamText, stepCountIs } from "ai";
 import { openai } from "@ai-sdk/openai";
 import { anthropic } from "@ai-sdk/anthropic";
 import { google } from "@ai-sdk/google";
@@ -16,8 +16,6 @@ interface Message {
   role: Role;
   content: string;
 }
-
-
 
 function streamFromString(text: string, delayMs = 10): ReadableStream<Uint8Array> {
   const encoder = new TextEncoder();
@@ -67,160 +65,130 @@ function resolveModel(selected?: string) {
 
 export async function POST(req: Request) {
   try {
-    const { messages, prompt: explicitPrompt, model: selectedModel, tools: selectedTools }: { 
+    const { messages, prompt: explicitPrompt, model: selectedModel, tools: selectedTools, userId }: { 
       messages?: Message[]; 
       prompt?: string; 
       model?: string; 
       tools?: string[];
+      userId?: string;
     } = await req.json();
-    
     
     const msgs: Message[] = messages && messages.length > 0 
       ? messages 
       : [{ role: "user", content: explicitPrompt ?? "" }];
     
+    const model = resolveModel(selectedModel);
+    const composioUserId = userId || "ca_VYRbOnfLPnef";
     
-    try {
-      const model = resolveModel(selectedModel);
+    // Check if Twitter tools are selected
+    const hasTwitterTools = selectedTools?.some(tool => tool.includes('TWITTER')) || false;
+    
+    if (hasTwitterTools && process.env.COMPOSIO_API_KEY) {
+      console.log("Starting Twitter workflow with two agents");
       
-      let composioTools = {};
+      // AGENT 1: Research and Generate Tweet Content
+      // AGENT 1: Research Agent - Web Search
+      console.log("Starting Agent 1: Web Research");
       
-      // Initialize Composio tools if any are selected
-      if (selectedTools && selectedTools.length > 0 && process.env.COMPOSIO_API_KEY) {
-        try {
-          const composio = new Composio({
-            apiKey: process.env.COMPOSIO_API_KEY,
-            provider: new VercelProvider(),
-          });
-          // Get tools from Composio - assuming we have a default user ID
-          const userId = "default"; // In production, this should be the actual user ID
-          
-          // Get tools by their slugs - pass as array to tools.get
-          composioTools = await composio.tools.get(userId, {
-            tools: selectedTools,
-          });
-          
-        } catch (toolError) {
-        }
-      }
-      
-      const streamTextOptions: any = {
-        model, 
+      const researchResult = await generateText({
+        model,
         messages: msgs.map(m => ({ role: m.role, content: m.content })),
-        maxSteps: 10,
-        experimental_continueSteps: true
+        tools: {
+          web_search_preview: openai.tools.webSearchPreview({
+            searchContextSize: 'low',
+          }),
+        },
+        toolChoice: { type: 'tool', toolName: 'web_search_preview' },
+        system: `You are a research agent. Your job is to search the web for current information about the user's topic.
+
+<task>
+Search for the most recent and relevant information about the user's topic and provide a research summary.
+</task>
+
+<requirements>
+- Use web search to find current information in ${new Date().getFullYear()}
+- Provide a comprehensive research summary
+- Focus on recent developments, trends, and key insights
+- Be thorough in your research findings
+</requirements>`,
+      });
+      
+      console.log("Agent 1 completed. Research findings:", researchResult.text);
+      console.log("Research sources:", researchResult.sources);
+      
+      // AGENT 2: Synthesis Agent - Generate Tweet
+      console.log("Starting Agent 2: Tweet Generation");
+      
+      const tweetResult = await generateText({
+        model,
+        messages: [
+          {
+            role: "system",
+            content: `You are a tweet synthesis agent. Create an opinionated Twitter post based on research findings.
+
+                  <requirements>
+                  - Write a provocative, opinionated take (not generic observations)
+                  - Keep under 280 characters, no hashtags
+                  - Avoid jargon, dashes or ems e.g ——, or fluff words
+                  - Take a clear stance on the topic
+                  - End with exactly: "TWEET_CONTENT: [your opinionated tweet]"
+                  </requirements>.`
+          },
+          {
+            role: "user", 
+            content: `Based on this research about "${msgs[msgs.length - 1]?.content}", create an opinionated tweet:\n\nRESEARCH FINDINGS:\n${researchResult.text}`
+          }
+        ],
+      });
+      
+      console.log("Agent 2 completed. Tweet generation:", tweetResult.text);
+      
+      // Extract tweet content from Agent 2
+      const tweetMatch = tweetResult.text.match(/TWEET_CONTENT:\s*(.+?)(?:\n|$)/);
+      const tweetContent = tweetMatch ? tweetMatch[1].trim() : tweetResult.text.slice(-280);
+      
+      // Use sources from Agent 1 (research)
+      const sources = researchResult.sources || [];
+      
+      console.log("Final tweet content:", tweetContent);
+      console.log("Final sources:", sources);
+      
+      // Create preview card data with real sources
+      const twitterPreviewData = {
+        type: 'twitter-post-preview',
+        content: tweetContent,
+        userId: composioUserId,
+        timestamp: Date.now(),
+        posted: false,
+        sources: sources,
+        researchText: researchResult.text
       };
       
-      // Only add tools if we have any
-      if (Object.keys(composioTools).length > 0) {
-        streamTextOptions.tools = composioTools;
-        streamTextOptions.maxToolRoundtrips = 3;
-        streamTextOptions.toolChoice = "auto"; // Allow model to choose when to use tools
-        // Add system message to ensure proper tool usage
-        streamTextOptions.system = "You are a helpful assistant. When using tools, always provide a clear response based on the tool results. After executing any tool, explain what you found or accomplished.";
-      }
+      console.log('Created Twitter preview data:', twitterPreviewData);
       
+      // Return only the preview card data
+      const responseWithCard = `__TWITTER_PREVIEW__${JSON.stringify(twitterPreviewData)}__TWITTER_PREVIEW__`;
       
-      const result = streamText(streamTextOptions);
-      
-      
-      // For tool-enabled requests, we need a two-step process
-      if (Object.keys(composioTools).length > 0) {
-        
-        // Create a custom readable stream that handles tool execution then AI response
-        const stream = new ReadableStream({
-          async start(controller) {
-            const encoder = new TextEncoder();
-            let toolResults: any[] = [];
-            let toolCalls: any[] = [];
-            
-            try {
-              // STEP 1: Execute tools
-              
-              for await (const part of result.fullStream) {
-                
-                if (part.type === 'tool-call') {
-                  const toolCallData = {
-                    type: 'tool-call',
-                    toolName: part.toolName,
-                    toolCallId: part.toolCallId,
-                    args: part.input || {}
-                  };
-                  toolCalls.push(toolCallData);
-                  
-                  // Send tool call to frontend
-                  const toolCallJson = `\n\n__TOOL_CALL__${JSON.stringify(toolCallData)}__TOOL_CALL__\n\n`;
-                  controller.enqueue(encoder.encode(toolCallJson));
-                } else if (part.type === 'tool-result') {
-                  const toolResultData = {
-                    type: 'tool-result',
-                    toolCallId: part.toolCallId,
-                    toolName: part.toolName,
-                    result: part.output || {}  
-                  };
-                  toolResults.push(toolResultData);
-                  
-                  // Send tool result to frontend
-                  const toolResultJson = `\n\n__TOOL_RESULT__${JSON.stringify(toolResultData)}__TOOL_RESULT__\n\n`;
-                  controller.enqueue(encoder.encode(toolResultJson));
-                }
-              }
-              
-              
-              // STEP 2: Get AI response based on tool results
-              if (toolResults.length > 0) {
-                
-                // Create new messages array with tool results
-                const messagesWithResults = [
-                  ...msgs.map(m => ({ role: m.role, content: m.content })),
-                  {
-                    role: "user" as const,
-                    content: `Based on the following tool results, please provide a helpful response:\n\n${toolResults.map(tr => `Tool: ${tr.toolName}\nResult: ${JSON.stringify(tr.result, null, 2)}`).join('\n\n')}`
-                  }
-                ];
-                
-                // Make second LLM call without tools for the response
-                const responseResult = streamText({
-                  model,
-                  messages: messagesWithResults,
-                  system: "You are a helpful assistant. Provide a clear, helpful response based on the tool results provided. Summarize and interpret the results for the user."
-                });
-                
-                // Stream the AI response
-                for await (const part of responseResult.textStream) {
-                  controller.enqueue(encoder.encode(part));
-                }
-                
-              }
-            } catch (error) {
-              const errorMsg = `\n\nError: ${error instanceof Error ? error.message : 'Unknown error'}`;
-              controller.enqueue(encoder.encode(errorMsg));
-            } finally {
-              controller.close();
-            }
-          }
-        });
-        
-        return new Response(stream, {
-          headers: { 
-            'content-type': 'text/plain; charset=utf-8',
-            'cache-control': 'no-cache'
-          }
-        });
-      }
-      
-      // For non-tool requests, use standard text stream
-      const response = result.toTextStreamResponse();
-      return response;
-    } catch (providerError) {
-      // Provider not available or missing key; return error message
-      const errorMessage = "Sorry, AI model is not available. Please check your API keys configuration.";
-      return new Response(streamFromString(errorMessage), {
+      return new Response(responseWithCard, {
         headers: { "content-type": "text/plain; charset=utf-8" },
       });
     }
+    
+    // For non-Twitter requests, use standard generation
+    const result = await generateText({
+      model,
+      messages: msgs.map(m => ({ role: m.role, content: m.content })),
+      system: "You are a helpful assistant. You can also remind the user to enable the Twitter/X tools to research, generate and post to their X account."
+    });
+    
+    return new Response(result.text, {
+      headers: { "content-type": "text/plain; charset=utf-8" },
+    });
+    
   } catch (error) {
-    return new Response(streamFromString("Sorry, something went wrong."), {
+    console.error("Error in chat API:", error);
+    const errorMessage = error instanceof Error ? error.message : "Sorry, something went wrong.";
+    return new Response(errorMessage, {
       headers: { "content-type": "text/plain; charset=utf-8" },
       status: 500,
     });

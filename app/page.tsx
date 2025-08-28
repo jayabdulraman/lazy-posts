@@ -2,6 +2,9 @@
 
 import React from "react";
 import ReactMarkdown from 'react-markdown';
+import TwitterPostCard from '../components/twitter/TwitterPostCard';
+import TwitterStatus from '../components/twitter/TwitterStatus';
+import { useTwitterStore } from '../store/twitterStore';
 
 function IconHamburger() {
   return (
@@ -77,13 +80,6 @@ function IconChevronDown() {
   );
 }
 
-function IconPaperclip() {
-  return (
-    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden>
-      <path d="M21.44 11.05l-9.19 9.19a6 6 0 0 1-8.49-8.49l9.19-9.19a4 4 0 0 1 5.66 5.66l-9.2 9.2a2 2 0 1 1-2.83-2.83L15 6" />
-    </svg>
-  );
-}
 
 function IconPlus() {
   return (
@@ -148,6 +144,9 @@ type ChatMessage = {
   content: string;
   toolCalls?: ToolCall[];
   toolResults?: ToolResult[];
+  twitterPosts?: TwitterPostResult[];
+  sources?: string[];
+  researchText?: string;
   model?: string;
   tokensPerSecond?: number;
   totalTokens?: number;
@@ -156,34 +155,12 @@ type ChatMessage = {
 };
 type Thread = { id: string; title: string; messages: ChatMessage[] };
 
-type Category = "create" | "explore" | "code" | "learn";
-
-const categoryPrompts: Record<Category, string[]> = {
-  create: [
-    "Write a short story about time travel",
-    "Design a logo concept for a tech startup",
-    "Create a social media campaign for sustainability",
-    "Generate ideas for a mobile app"
-  ],
-  explore: [
-    "What are the latest developments in quantum computing?",
-    "Explain the James Webb Space Telescope discoveries",
-    "How do neural networks actually work?",
-    "What's happening with climate change research?"
-  ],
-  code: [
-    "Build a React component for a todo list",
-    "Write a Python script to analyze CSV data",
-    "Create a REST API endpoint with authentication",
-    "Debug this JavaScript async function"
-  ],
-  learn: [
-    "Teach me about machine learning fundamentals",
-    "Explain blockchain technology simply",
-    "How do I get started with data science?",
-    "What are the basics of cybersecurity?"
-  ]
-};
+const twitterPrompts: string[] = [
+  "Research and create a Twitter post about current AI trends",
+  "Find latest news and tweet about space exploration", 
+  "Research recent tech developments and post on Twitter",
+  "Discover trending topics and create engaging Twitter content",
+];
 
 interface Toolkit {
   slug: string;
@@ -216,6 +193,28 @@ interface ToolResult {
   toolCallId: string;
   toolName: string;
   result: any;
+}
+
+interface TwitterPostResult {
+  type: 'twitter-post-result' | 'twitter-post-preview' | 'twitter-post-success';
+  toolCallId?: string;
+  tweetId?: string;
+  tweetUrl?: string;
+  content: string;
+  createdAt?: string;
+  timestamp?: number;
+  user?: {
+    id?: string;
+    name?: string;
+    username?: string;
+    profile_image_url?: string;
+  };
+  success?: boolean;
+  posted: boolean;
+  userId?: string;
+  tweetData?: any;
+  sources?: string[];
+  researchText?: string;
 }
 
 function MessageActions({ 
@@ -377,109 +376,61 @@ function ToolsModalContent({
   selectedTools: string[]; 
   setSelectedTools: (tools: string[]) => void; 
 }) {
-  const [toolkits, setToolkits] = React.useState<Toolkit[]>([]);
-  const [loading, setLoading] = React.useState(true);
-  const [expandedToolkit, setExpandedToolkit] = React.useState<string | null>(null);
+  const [loading, setLoading] = React.useState(false);
 
-  React.useEffect(() => {
-    async function fetchToolkits() {
-      try {
-        const response = await fetch('/api/toolkits');
-        const data = await response.json();
-        setToolkits(data.items || []);
-      } catch (error) {
-      } finally {
-        setLoading(false);
-      }
-    }
-    fetchToolkits();
-  }, []);
-
-  const toggleTool = (toolSlug: string) => {
-    if (selectedTools.includes(toolSlug)) {
-      setSelectedTools(selectedTools.filter(t => t !== toolSlug));
+  const toggleTwitter = () => {
+    if (selectedTools.includes('TWITTER')) {
+      // Remove Twitter tools
+      setSelectedTools([]);
     } else {
-      setSelectedTools([...selectedTools, toolSlug]);
+      // Add Twitter tools (search tools are added automatically by backend)
+      setSelectedTools(['TWITTER']);
     }
   };
-
-  const expandToolkit = async (toolkit: Toolkit) => {
-    if (expandedToolkit === toolkit.slug) {
-      setExpandedToolkit(null);
-      return;
-    }
-
-    if (!toolkit.tools) {
-      // Fetch tools for this toolkit
-      try {
-        const response = await fetch(`/api/toolkits/${toolkit.slug}/tools`);
-        const data = await response.json();
-        toolkit.tools = data.items || [];
-        setToolkits([...toolkits]); // Trigger re-render
-      } catch (error) {
-      }
-    }
-    
-    setExpandedToolkit(toolkit.slug);
-  };
-
-  if (loading) {
-    return (
-      <div className="flex items-center justify-center py-12">
-        <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-[#aa4673]"></div>
-      </div>
-    );
-  }
 
   return (
     <div className="space-y-4">
-      {toolkits.map((toolkit) => (
-        <div key={toolkit.slug} className="border border-gray-200 rounded-lg overflow-hidden">
-          <button
-            onClick={() => expandToolkit(toolkit)}
-            className="w-full p-4 text-left hover:bg-gray-50 flex items-center justify-between"
-          >
-            <div className="flex items-center space-x-3">
-              {toolkit.meta.logo && (
-                <img src={toolkit.meta.logo} alt={toolkit.name} className="w-8 h-8" />
-              )}
-              <div>
-                <h3 className="font-medium text-gray-900">{toolkit.name}</h3>
-                <p className="text-sm text-gray-500">{toolkit.meta.description}</p>
-                <p className="text-xs text-gray-400">{toolkit.meta.tools_count} tools</p>
-              </div>
+      <div className="border border-gray-200 rounded-lg overflow-hidden">
+        <div className="p-4">
+          <div className="flex items-center space-x-3">
+            <div className="w-8 h-8 bg-black rounded-lg flex items-center justify-center">
+              <svg width="16" height="16" viewBox="0 0 24 24" fill="white">
+                <path d="M18.244 2.25h3.308l-7.227 8.26 8.502 11.24H16.17l-5.214-6.817L4.99 21.75H1.68l7.73-8.835L1.254 2.25H8.08l4.713 6.231zm-1.161 17.52h1.833L7.084 4.126H5.117z"/>
+              </svg>
             </div>
-            <div className="text-gray-400">
-              {expandedToolkit === toolkit.slug ? '−' : '+'}
+            <div className="flex-1">
+              <h3 className="font-medium text-gray-900">X.com</h3>
+              <p className="text-sm text-gray-500">Research topics and post to your X account automatically</p>
             </div>
-          </button>
+            <label className="flex items-center">
+              <input
+                type="checkbox"
+                checked={selectedTools.includes('TWITTER')}
+                onChange={toggleTwitter}
+                className="text-[#aa4673] focus:ring-[#aa4673] mr-2"
+              />
+              <span className="text-sm font-medium text-gray-700">Enable</span>
+            </label>
+          </div>
           
-          {expandedToolkit === toolkit.slug && toolkit.tools && (
-            <div className="border-t border-gray-200 bg-gray-50">
-              <div className="p-4 space-y-2">
-                {toolkit.tools.map((tool) => (
-                  <label 
-                    key={tool.slug || tool.name} 
-                    className="flex items-start space-x-3 p-2 hover:bg-white rounded cursor-pointer"
-                  >
-                    <input
-                      type="checkbox"
-                      checked={selectedTools.includes(tool.slug || tool.name)}
-                      onChange={() => toggleTool(tool.slug || tool.name)}
-                      className="mt-1 text-[#aa4673] focus:ring-[#aa4673]"
-                    />
-                    <div className="flex-1">
-                      <div className="font-medium text-sm text-gray-900">{tool.displayName || tool.name}</div>
-                      <div className="text-xs text-gray-500">{tool.description}</div>
-                      <div className="text-xs text-gray-400 font-mono">{tool.slug || tool.name}</div>
-                    </div>
-                  </label>
-                ))}
-              </div>
+          {selectedTools.includes('TWITTER') && (
+            <div className="mt-4 p-3 bg-blue-50 rounded-lg">
+              <p className="text-xs text-blue-800 font-medium">
+                ✨ Includes automatic web research and X.com posting
+              </p>
+              <p className="text-xs text-blue-600 mt-1">
+                When enabled, the AI will research topics using web search and post to your X account automatically.
+              </p>
             </div>
           )}
         </div>
-      ))}
+      </div>
+      
+      <div className="p-4 bg-gray-50 rounded-lg">
+        <p className="text-xs text-gray-600">
+          <strong>Note:</strong> More tools coming soon! For now, we're focusing on perfecting the X research and posting workflow.
+        </p>
+      </div>
     </div>
   );
 }
@@ -492,21 +443,20 @@ export default function Home() {
   const [threads, setThreads] = React.useState<Thread[]>([{ id: crypto.randomUUID(), title: "Greeting Title", messages: [] }]);
   const [activeThreadId, setActiveThreadId] = React.useState<string>("");
   const [input, setInput] = React.useState("");
-  const [selectedModel, setSelectedModel] = React.useState("gpt-5-mini");
+  const [selectedModel, setSelectedModel] = React.useState("gpt-4.1-nano-2025-04-14");
   const [isModelMenuOpen, setIsModelMenuOpen] = React.useState(false);
   const [modelQuery, setModelQuery] = React.useState("");
   const modelMenuRef = React.useRef<HTMLDivElement | null>(null);
-  const fileInputRef = React.useRef<HTMLInputElement | null>(null);
-  const [attachments, setAttachments] = React.useState<File[]>([]);
   const [isLoading, setIsLoading] = React.useState(false);
   const [messageStartTime, setMessageStartTime] = React.useState<number | null>(null);
   const [firstTokenTime, setFirstTokenTime] = React.useState<number | null>(null);
   const messagesEndRef = React.useRef<HTMLDivElement | null>(null);
   const composerRef = React.useRef<HTMLDivElement | null>(null);
   const [composerHeight, setComposerHeight] = React.useState<number>(160);
-  const [selectedCategory, setSelectedCategory] = React.useState<Category>("create");
   const [isToolsModalOpen, setIsToolsModalOpen] = React.useState(false);
   const [selectedTools, setSelectedTools] = React.useState<string[]>([]);
+  const [isTwitterAuthenticated, setIsTwitterAuthenticated] = React.useState(false);
+  const { getUserId } = useTwitterStore();
 
   const modelOptions = React.useMemo(
     () => [
@@ -610,6 +560,59 @@ export default function Home() {
   const activeThread = threads.find((t) => t.id === activeThreadId) ?? threads[0];
   const showWelcome = (activeThread?.messages.length ?? 0) === 0 && input.trim().length === 0;
 
+  // Handle posting a tweet after preview
+  const handlePostTweet = async (content: string, userId: string) => {
+    try {
+      const response = await fetch('/api/twitter/post', {
+        method: 'POST',
+        headers: { 'content-type': 'application/json' },
+        body: JSON.stringify({ content, userId })
+      });
+      
+      const result = await response.json();
+      
+      console.log('Post tweet result:', result);
+      
+      if (!result.success) {
+        throw new Error(result.error || 'Failed to post tweet');
+      }
+      
+      // Update the message to show the posted tweet
+      setThreads((prev) => prev.map((thread) => {
+        if (thread.id !== activeThread.id) return thread;
+        
+        return {
+          ...thread,
+          messages: thread.messages.map((message) => {
+            if (message.role !== 'assistant' || !message.twitterPosts) return message;
+            
+            return {
+              ...message,
+              twitterPosts: message.twitterPosts.map((post) => {
+                if (post.content === content && !post.posted) {
+                  // Convert preview to posted with all the returned data
+                  const updatedPost = {
+                    ...post, // Keep original preview data
+                    ...result.twitterData, // Override with API response data
+                    posted: true
+                  } as TwitterPostResult;
+                  
+                  console.log('Updated post data:', updatedPost);
+                  return updatedPost;
+                }
+                return post;
+              })
+            };
+          })
+        };
+      }));
+      
+    } catch (error) {
+      console.error('Error posting tweet:', error);
+      throw error;
+    }
+  };
+  
   async function sendMessage(text: string, retryFromMessage?: ChatMessage) {
     if (!text.trim()) return;
     
@@ -648,161 +651,79 @@ export default function Home() {
         headers: { "content-type": "application/json" },
         body: JSON.stringify({
           model: selectedModel,
-          attachments: attachments.map((f) => ({ name: f.name, size: f.size, type: f.type })),
           messages: [...targetMessages, userMsg],
           tools: selectedTools,
+          userId: getUserId(), // Include user ID for Composio tools
         }),
       });
 
-      // If backend streams text/plain, read incrementally; else fall back to JSON
-      const contentType = res.headers.get("content-type") || "";
+      // Check if Twitter tools are selected (now using non-streaming for Twitter)
+      const hasTwitterTools = selectedTools?.some(tool => tool.includes('TWITTER')) || false;
       
-      if (contentType.includes("text/plain")) {
-        const reader = res.body?.getReader();
-        const decoder = new TextDecoder();
-        let acc = "";
-        const streamMsgId = "stream-" + userMsg.id;
-        
-        // Add initial empty assistant message
-        const initialMsg: ChatMessage = { 
-          id: streamMsgId, 
-          role: "assistant", 
-          content: "",
-          model: selectedModel,
-          timestamp: Date.now()
-        };
-        setThreads((prev) => prev.map((t) => t.id === activeThread.id ? { ...t, messages: [...t.messages, initialMsg] } : t));
-        
-        if (reader) {
-          try {
-            let toolCalls: ToolCall[] = [];
-            let toolResults: ToolResult[] = [];
-            let totalChars = 0;
-            let streamStartTime = Date.now();
-            let firstChunkTime: number | null = null;
-            let lastUpdateTime = streamStartTime;
-            
-            while (true) {
-              const { value, done } = await reader.read();
-              if (done) {
-                break;
-              }
-              const chunk = decoder.decode(value, { stream: true });
-              acc += chunk;
-              
-              // Track first meaningful chunk time for TTFT
-              if (!firstChunkTime && chunk.trim().length > 0) {
-                firstChunkTime = Date.now();
-              }
-              
-              // Count characters for token estimation
-              totalChars += chunk.length;
-              
-              // Parse tool calls and results from the accumulated content
-              const parseToolData = (content: string) => {
-                let cleanContent = content;
-                const newToolCalls: ToolCall[] = [...toolCalls];
-                const newToolResults: ToolResult[] = [...toolResults];
-                
-                // Extract tool calls
-                const toolCallMatches = cleanContent.matchAll(/__TOOL_CALL__(.*?)__TOOL_CALL__/g);
-                for (const match of toolCallMatches) {
-                  try {
-                    const toolCall = JSON.parse(match[1]) as ToolCall;
-                    if (!newToolCalls.find(tc => tc.toolCallId === toolCall.toolCallId)) {
-                      newToolCalls.push(toolCall);
-                    }
-                    cleanContent = cleanContent.replace(match[0], '');
-                  } catch (e) {
-                  }
-                }
-                
-                // Extract tool results
-                const toolResultMatches = cleanContent.matchAll(/__TOOL_RESULT__(.*?)__TOOL_RESULT__/g);
-                for (const match of toolResultMatches) {
-                  try {
-                    const toolResult = JSON.parse(match[1]) as ToolResult;
-                    if (!newToolResults.find(tr => tr.toolCallId === toolResult.toolCallId)) {
-                      newToolResults.push(toolResult);
-                    }
-                    cleanContent = cleanContent.replace(match[0], '');
-                  } catch (e) {
-                  }
-                }
-                
-                toolCalls = newToolCalls;
-                toolResults = newToolResults;
-                return cleanContent.trim();
-              };
-              
-              const cleanContent = parseToolData(acc);
-              
-              // Calculate real-time metrics
-              const currentTime = Date.now();
-              const elapsedTime = (currentTime - streamStartTime) / 1000;
-              
-              // Better token estimation: ~3.5 chars per token for English text (based on clean content)
-              const estimatedTokens = Math.ceil(cleanContent.length / 3.5);
-              const tokensPerSecond = estimatedTokens > 0 && elapsedTime > 0.1 ? estimatedTokens / elapsedTime : 0;
-              
-              // Calculate TTFT from request start
-              const ttft = firstChunkTime && messageStartTime ? firstChunkTime - messageStartTime : undefined;
-              
-              // Update streaming message with real-time metrics
-              setThreads((prev) => prev.map((t) => {
-                if (t.id !== activeThread.id) return t;
-                return {
-                  ...t,
-                  messages: t.messages.map((m) => 
-                    m.id === streamMsgId ? { 
-                      ...m, 
-                      content: cleanContent,
-                      toolCalls,
-                      toolResults,
-                      timeToFirstToken: ttft,
-                      tokensPerSecond: tokensPerSecond > 0 ? tokensPerSecond : undefined,
-                      totalTokens: estimatedTokens > 0 ? estimatedTokens : undefined
-                    } : m
-                  )
-                };
-              }));
-            }
-          } catch (error) {
-            // Replace streaming message with error
-            const errorMsg: ChatMessage = { id: crypto.randomUUID(), role: "assistant", content: "Sorry, streaming failed." };
-            setThreads((prev) => prev.map((t) => {
-              if (t.id !== activeThread.id) return t;
-              return {
-                ...t,
-                messages: t.messages.map((m) => m.id === streamMsgId ? errorMsg : m)
-              };
-            }));
-          }
-        } else {
-          const fullText = await res.text();
-          const botMsg: ChatMessage = { 
-            id: crypto.randomUUID(), 
-            role: "assistant", 
-            content: fullText,
-            model: selectedModel,
-            timestamp: Date.now(),
-            timeToFirstToken: firstTokenTime || undefined
-          };
-          setThreads((prev) => prev.map((t) => t.id === activeThread.id ? { ...t, messages: [...t.messages, botMsg] } : t));
+      // Handle text response for both Twitter and non-Twitter requests
+      const fullText = await res.text();
+      
+      // Parse Twitter post data from response
+      let twitterPosts: TwitterPostResult[] = [];
+      let cleanContent = fullText;
+      
+      // Parse published Twitter posts
+      const twitterPostMatches = fullText.matchAll(/__TWITTER_POST__(.*?)__TWITTER_POST__/g);
+      for (const match of twitterPostMatches) {
+        try {
+          console.log('Found Twitter post match:', match[1]);
+          const twitterPost = JSON.parse(match[1]) as TwitterPostResult;
+          console.log('Parsed Twitter post:', twitterPost);
+          twitterPosts.push(twitterPost);
+          cleanContent = cleanContent.replace(match[0], '');
+        } catch (e) {
+          console.error('Error parsing Twitter post:', e, match[1]);
         }
-      } else {
-        const data = await res.json();
-        const botMsg: ChatMessage = { 
-          id: crypto.randomUUID(), 
-          role: "assistant", 
-          content: String(data.content ?? ""),
-          model: selectedModel,
-          timestamp: Date.now(),
-          timeToFirstToken: firstTokenTime || undefined
-        };
-        setThreads((prev) => prev.map((t) => t.id === activeThread.id ? { ...t, messages: [...t.messages, botMsg] } : t));
       }
-      setAttachments([]);
+      
+      // Parse Twitter preview posts
+      const twitterPreviewMatches = fullText.matchAll(/__TWITTER_PREVIEW__(.*?)__TWITTER_PREVIEW__/g);
+      let extractedSources: string[] = [];
+      let extractedResearchText: string | undefined;
+      
+      for (const match of twitterPreviewMatches) {
+        try {
+          console.log('Found Twitter preview match:', match[1]);
+          const twitterPreview = JSON.parse(match[1]) as TwitterPostResult;
+          console.log('Parsed Twitter preview:', twitterPreview);
+          
+          // Extract sources from preview data
+          if (twitterPreview.sources && twitterPreview.sources.length > 0) {
+            extractedSources = twitterPreview.sources;
+            console.log('Extracted sources from preview data:', extractedSources);
+          }
+          
+          // Extract research text from preview data
+          if (twitterPreview.researchText) {
+            extractedResearchText = twitterPreview.researchText;
+            console.log('Extracted research text from preview data');
+          }
+          
+          twitterPosts.push(twitterPreview);
+          cleanContent = cleanContent.replace(match[0], '');
+        } catch (e) {
+          console.error('Error parsing Twitter preview:', e, match[1]);
+        }
+      }
+      
+      const botMsg: ChatMessage = { 
+        id: crypto.randomUUID(), 
+        role: "assistant", 
+        content: cleanContent.trim(),
+        twitterPosts: twitterPosts.length > 0 ? twitterPosts : undefined,
+        sources: extractedSources.length > 0 ? extractedSources : undefined,
+        researchText: extractedResearchText,
+        model: selectedModel,
+        timestamp: Date.now(),
+        timeToFirstToken: firstTokenTime || undefined
+      };
+      
+      setThreads((prev) => prev.map((t) => t.id === activeThread.id ? { ...t, messages: [...t.messages, botMsg] } : t));
     } catch (e) {
       const errorMsg: ChatMessage = { 
         id: crypto.randomUUID(), 
@@ -883,56 +804,9 @@ export default function Home() {
           <section className="mx-auto mt-8 w-full max-w-2xl text-left">
             <h1 className="text-2xl font-semibold font-weight-600 tracking-tight sm:text-[30px] pb-6 pt-12 justify-left text-[#4e2a58]">How can I help you?</h1>
 
-<div className="flex flex-row flex-wrap gap-2.5 text-sm max-sm:justify-evenly">
-  <button 
-    onClick={() => setSelectedCategory("create")}
-    className={`justify-center whitespace-nowrap text-sm transition-colors focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring disabled:cursor-not-allowed disabled:opacity-50 [&_svg]:pointer-events-none [&_svg]:size-4 [&_svg]:shrink-0 h-9 flex items-center gap-1 rounded-xl px-5 py-2 font-semibold outline-1 outline-secondary/70 backdrop-blur-xl max-sm:size-16 max-sm:flex-col sm:gap-2 sm:rounded-full ${
-      selectedCategory === "create" 
-        ? "bg-[#aa4673] text-primary-foreground shadow hover:bg-[#aa4673]/90" 
-        : "bg-secondary/30 text-secondary-foreground/90 outline hover:bg-secondary"
-    }`}
-  >
-    <IconPlusSparkles />
-    <div>Create</div>
-  </button>
-  <button 
-    onClick={() => setSelectedCategory("explore")}
-    className={`justify-center whitespace-nowrap text-sm transition-colors focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring disabled:cursor-not-allowed disabled:opacity-50 [&_svg]:pointer-events-none [&_svg]:size-4 [&_svg]:shrink-0 h-9 flex items-center gap-1 rounded-xl px-5 py-2 font-semibold outline-1 outline-secondary/70 backdrop-blur-xl max-sm:size-16 max-sm:flex-col sm:gap-2 sm:rounded-full ${
-      selectedCategory === "explore" 
-        ? "bg-[#aa4673] text-primary-foreground shadow hover:bg-[#aa4673]/90" 
-        : "bg-secondary/30 text-secondary-foreground/90 outline hover:bg-secondary"
-    }`}
-  >
-    <IconCompass />
-    <div>Explore</div>
-  </button>
-  <button 
-    onClick={() => setSelectedCategory("code")}
-    className={`justify-center whitespace-nowrap text-sm transition-colors focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring disabled:cursor-not-allowed disabled:opacity-50 [&_svg]:pointer-events-none [&_svg]:size-4 [&_svg]:shrink-0 h-9 flex items-center gap-1 rounded-xl px-5 py-2 font-semibold outline-1 outline-secondary/70 backdrop-blur-xl max-sm:size-16 max-sm:flex-col sm:gap-2 sm:rounded-full ${
-      selectedCategory === "code" 
-        ? "bg-[#aa4673] text-primary-foreground shadow hover:bg-[#aa4673]/90" 
-        : "bg-secondary/30 text-secondary-foreground/90 outline hover:bg-secondary"
-    }`}
-  >
-    <IconCode />
-    <div>Code</div>
-  </button>
-  <button 
-    onClick={() => setSelectedCategory("learn")}
-    className={`justify-center whitespace-nowrap text-sm transition-colors focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring disabled:cursor-not-allowed disabled:opacity-50 [&_svg]:pointer-events-none [&_svg]:size-4 [&_svg]:shrink-0 h-9 flex items-center gap-1 rounded-xl px-5 py-2 font-semibold outline-1 outline-secondary/70 backdrop-blur-xl max-sm:size-16 max-sm:flex-col sm:gap-2 sm:rounded-full ${
-      selectedCategory === "learn" 
-        ? "bg-[#aa4673] text-primary-foreground shadow hover:bg-[#aa4673]/90" 
-        : "bg-secondary/30 text-secondary-foreground/90 outline hover:bg-secondary"
-    }`}
-  >
-    <IconHat />
-    <div>Learn</div>
-  </button>
-</div>
-
             {activeThread?.messages.length === 0 && (
               <div className="mx-auto mt-4 w-full max-w-2xl divide-y divide-rose-100 overflow-hidden rounded-2xl text-left pt-1">
-                {categoryPrompts[selectedCategory].map((prompt: string) => (
+                {twitterPrompts.map((prompt: string) => (
                   <button
                     key={prompt}
                     onClick={() => onSuggestionClick(prompt)}
@@ -969,36 +843,185 @@ export default function Home() {
                     )}
                     
                     {/* Message content */}
-                    {m.content && (
-                      <div className="w-full">
-                        <div
-                          className={`${
-                            m.role === "user"
-                              ? "bg-[#f5dbef] text-[#432A78]"
-                              : "bg-[#fdf7fd] text-rose-900"
-                          } whitespace-pre-wrap rounded-2xl px-4 py-3`}
-                        >
-                          {m.role === "assistant" ? (
-                            <div className="prose prose-sm max-w-none prose-headings:text-rose-900 prose-p:text-rose-900 prose-li:text-rose-900 prose-strong:text-rose-900 prose-code:text-rose-800 prose-code:bg-rose-100 prose-code:px-1 prose-code:py-0.5 prose-code:rounded prose-pre:bg-rose-100 prose-pre:text-rose-800">
-                              <ReactMarkdown>
-                                {m.content}
-                              </ReactMarkdown>
-                            </div>
-                          ) : (
-                            m.content
-                          )}
+                    {/* Twitter workflow - Show static layout */}
+                    {m.role === "assistant" && m.twitterPosts && m.twitterPosts.length > 0 ? (
+                      <div className="w-full space-y-4">
+                        {/* Step 1: Searching */}
+                        <div className="bg-[#fdf7fd] text-rose-900 rounded-2xl px-4 py-3">
+                          <div className="flex items-center gap-2">
+                            <span>🔍</span>
+                            <span>Searching for current information...</span>
+                          </div>
                         </div>
                         
-                        {/* Message Actions - only for assistant messages */}
-                        {m.role === "assistant" && (
-                          <MessageActions
-                            message={m}
-                            onCopy={handleCopyMessage}
-                            onBranchOff={() => handleBranchOff(m)}
-                            onRetry={() => handleRetryMessage(m)}
-                          />
-                        )}
+                        {/* Step 2: Research completed */}
+                        <div className="bg-[#fdf7fd] text-rose-900 rounded-2xl px-4 py-3">
+                          <div className="flex items-center gap-2">
+                            <span>📊</span>
+                            <span>Research completed!</span>
+                          </div>
+                        </div>
                       </div>
+                    ) : (
+                      /* Regular message content */
+                      m.content && (
+                        <div className="w-full">
+                          <div
+                            className={`${
+                              m.role === "user"
+                                ? "bg-[#f5dbef] text-[#432A78]"
+                                : "bg-[#fdf7fd] text-rose-900"
+                            } whitespace-pre-wrap rounded-2xl px-4 py-3`}
+                          >
+                            {m.role === "assistant" ? (
+                              <div className="prose prose-sm max-w-none prose-headings:text-rose-900 prose-p:text-rose-900 prose-li:text-rose-900 prose-strong:text-rose-900 prose-code:text-rose-800 prose-code:bg-rose-100 prose-code:px-1 prose-code:py-0.5 prose-code:rounded prose-pre:bg-rose-100 prose-pre:text-rose-800">
+                                <ReactMarkdown>
+                                  {m.content}
+                                </ReactMarkdown>
+                              </div>
+                            ) : (
+                              m.content
+                            )}
+                          </div>
+                        </div>
+                      )
+                    )}
+                    
+                    {/* Research findings accordion - only for assistant messages with research text */}
+                    {m.role === "assistant" && m.researchText && (
+                      <div className="mt-3">
+                        <details className="group bg-blue-50 rounded-lg border border-blue-200">
+                          <summary className="cursor-pointer px-4 py-3 text-sm font-medium text-blue-800 hover:bg-blue-100 rounded-lg transition-colors duration-200 flex items-center justify-between">
+                            <span className="flex items-center gap-2">
+                              🔍 Research Findings
+                            </span>
+                            <svg className="w-4 h-4 transform transition-transform duration-200 group-open:rotate-180" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M19 9l-7 7-7-7"></path>
+                            </svg>
+                          </summary>
+                          <div className="px-4 pb-4 pt-2 border-t border-blue-200 bg-blue-25">
+                            <div className="prose prose-sm max-w-none prose-headings:text-blue-900 prose-p:text-blue-800 prose-li:text-blue-800 prose-strong:text-blue-900 prose-code:text-blue-800 prose-code:bg-blue-100 prose-code:px-1 prose-code:py-0.5 prose-code:rounded prose-pre:bg-blue-100 prose-pre:text-blue-800">
+                              <ReactMarkdown>
+                                {m.researchText}
+                              </ReactMarkdown>
+                            </div>
+                          </div>
+                        </details>
+                      </div>
+                    )}
+                    
+                    {/* Sources chips - appear after research findings */}
+                    {m.role === "assistant" && (() => {
+                      console.log('Message sources debug:', { 
+                        messageId: m.id, 
+                        hasSources: !!m.sources, 
+                        sourcesLength: m.sources?.length || 0,
+                        sources: m.sources 
+                      });
+                      return m.sources && m.sources.length > 0;
+                    })() && (
+                      <div className="mt-3">
+                        <div className="text-xs text-rose-600 mb-2 font-medium">Sources:</div>
+                        <div className="flex flex-wrap gap-2">
+                          {m.sources?.slice(0, 3).map((source, index) => {
+                            // Handle both string URLs and source objects
+                            const sourceUrl = typeof source === 'string' ? source : (source as any).url;
+                            const sourceTitle = typeof source === 'string' ? source : (source as any).title;
+                            
+                            return (
+                              <a
+                                key={index}
+                                href={sourceUrl}
+                                target="_blank"
+                                rel="noopener noreferrer"
+                                className="inline-block px-3 py-1 bg-rose-100 hover:bg-rose-200 text-rose-700 text-xs rounded-full transition-colors duration-200 max-w-xs truncate border border-rose-200"
+                                title={sourceTitle}
+                              >
+                                🔗 {(() => {
+                                  try {
+                                    return new URL(sourceUrl).hostname;
+                                  } catch {
+                                    return sourceUrl?.length > 30 ? sourceUrl.substring(0, 30) + '...' : sourceUrl;
+                                  }
+                                })()}
+                              </a>
+                            );
+                          })}
+                          
+                          {m.sources && m.sources.length > 3 && (
+                            <div className="relative group">
+                              <div className="inline-block px-3 py-1 bg-rose-100 text-rose-700 text-xs rounded-full border border-rose-200 cursor-default">
+                                +{m.sources.length - 3}
+                              </div>
+                              
+                              {/* Tooltip with remaining sources */}
+                              <div className="absolute bottom-full left-0 mb-2 w-80 p-3 bg-white border border-gray-200 rounded-lg shadow-lg opacity-0 invisible group-hover:opacity-100 group-hover:visible transition-all duration-200 z-50">
+                                <div className="text-xs font-medium text-gray-700 mb-2">Additional sources:</div>
+                                <div className="flex flex-wrap gap-2">
+                                  {m.sources.slice(3).map((source, index) => {
+                                    const sourceUrl = typeof source === 'string' ? source : (source as any).url;
+                                    const sourceTitle = typeof source === 'string' ? source : (source as any).title;
+                                    
+                                    return (
+                                      <a
+                                        key={index + 3}
+                                        href={sourceUrl}
+                                        target="_blank"
+                                        rel="noopener noreferrer"
+                                        className="inline-block px-2 py-1 bg-gray-100 hover:bg-gray-200 text-gray-600 text-xs rounded-full transition-colors duration-200 max-w-xs truncate"
+                                        title={sourceTitle}
+                                      >
+                                        🔗 {(() => {
+                                          try {
+                                            return new URL(sourceUrl).hostname;
+                                          } catch {
+                                            return sourceUrl?.length > 25 ? sourceUrl.substring(0, 25) + '...' : sourceUrl;
+                                          }
+                                        })()}
+                                      </a>
+                                    );
+                                  })}
+                                </div>
+                              </div>
+                            </div>
+                          )}
+                        </div>
+                      </div>
+                    )}
+                    
+                    {/* Twitter workflow: Step 3 - Generating tweet */}
+                    {m.role === "assistant" && m.twitterPosts && m.twitterPosts.length > 0 && (
+                      <div className="mt-4">
+                        <div className="bg-[#fdf7fd] text-rose-900 rounded-2xl px-4 py-3">
+                          <div className="flex items-center gap-2">
+                            <span>💭</span>
+                            <span>Generating tweet based on findings...</span>
+                          </div>
+                        </div>
+                      </div>
+                    )}
+                    
+                    {/* Twitter post cards (only for assistant messages) - After message content, before actions */}
+                    {m.role === "assistant" && m.twitterPosts && m.twitterPosts.length > 0 && (
+                      <div className="mt-3 w-full">
+                        {m.twitterPosts.map((twitterPost, index) => (
+                          <TwitterPostCard 
+                            key={twitterPost.toolCallId || `preview-${index}`}
+                            postData={twitterPost}
+                            onPost={!twitterPost.posted ? handlePostTweet : undefined}
+                          />
+                        ))}
+                      </div>
+                    )}
+                    
+                    {/* Message Actions - only for assistant messages */}
+                    {m.role === "assistant" && (
+                      <MessageActions
+                        message={m}
+                        onCopy={handleCopyMessage}
+                        onBranchOff={() => handleBranchOff(m)}
+                        onRetry={() => handleRetryMessage(m)}
+                      />
                     )}
                   </div>
                 </div>
@@ -1086,41 +1109,15 @@ export default function Home() {
                       </span>
                       Tools {selectedTools.length > 0 && `(${selectedTools.length})`}
                     </button>
-                    <input
-                      ref={fileInputRef}
-                      type="file"
-                      multiple
-                      className="hidden"
-                      onChange={(e) => {
-                        const files = Array.from(e.target.files ?? []);
-                        if (files.length > 0) setAttachments((prev) => [...prev, ...files]);
-                        if (fileInputRef.current) fileInputRef.current.value = "";
-                      }}
-                    />
-                    <button
-                      onClick={() => fileInputRef.current?.click()}
-                      className="inline-flex items-center gap-1 rounded-full border border-rose-200/60 bg-white/70 px-2.5 py-1 font-medium hover:bg-white"
-                    >
-                      <span className="text-rose-500"><IconPaperclip /></span>
-                      Attach
-                    </button>
-                  </div>
-                  {attachments.length > 0 && (
-                    <div className="mt-2 flex flex-wrap items-center gap-2 text-[11px] text-rose-900/90">
-                      {attachments.map((file, idx) => (
-                        <span key={`${file.name}-${idx}`} className="inline-flex items-center gap-1 rounded-full border border-rose-200/60 bg-white/70 px-2.5 py-1">
-                          {file.name}
-                          <button
-                            aria-label="Remove attachment"
-                            className="ml-1 text-rose-500 hover:text-rose-700"
-                            onClick={() => setAttachments((prev) => prev.filter((_, i) => i !== idx))}
-                          >
-                            ×
-                          </button>
-                        </span>
-                      ))}
+                    
+                    {/* Twitter Status */}
+                    <div className="ml-2">
+                      <TwitterStatus 
+                        onAuthChange={setIsTwitterAuthenticated}
+                        className="text-xs"
+                      />
                     </div>
-                  )}
+                  </div>
                 </div>
                 <button aria-label="Send" onClick={() => sendMessage(input)} className="grid h-10 w-10 place-items-center rounded-xl bg-gradient-to-b from-rose-800 to-pink-800 text-white shadow-md transition hover:from-rose-600 hover:to-pink-600">
                   <IconArrowUp />
