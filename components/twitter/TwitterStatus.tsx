@@ -122,12 +122,6 @@ export default function TwitterStatus({ onAuthChange, className = "" }: TwitterS
     <div className={`space-y-2 ${className}`}>
       
       <TwitterAuthButton onAuthComplete={handleAuthComplete} />
-      
-      {error && (
-        <div className="text-xs text-gray-500">
-          {error}
-        </div>
-      )}
     </div>
   );
 }

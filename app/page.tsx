@@ -4,7 +4,10 @@ import React from "react";
 import ReactMarkdown from 'react-markdown';
 import TwitterPostCard from '../components/twitter/TwitterPostCard';
 import TwitterStatus from '../components/twitter/TwitterStatus';
+import LinkedInPostCard from '../components/linkedin/LinkedInPostCard';
+import LinkedInStatus from '../components/linkedin/LinkedInStatus';
 import { useTwitterStore } from '../store/twitterStore';
+import { useLinkedInStore } from '../store/linkedinStore';
 
 function IconHamburger() {
   return (
@@ -145,6 +148,7 @@ type ChatMessage = {
   toolCalls?: ToolCall[];
   toolResults?: ToolResult[];
   twitterPosts?: TwitterPostResult[];
+  linkedinPosts?: LinkedInPostResult[];
   sources?: string[];
   researchText?: string;
   model?: string;
@@ -160,6 +164,13 @@ const twitterPrompts: string[] = [
   "Find latest news and tweet about space exploration", 
   "Research recent tech developments and post on Twitter",
   "Discover trending topics and create engaging Twitter content",
+];
+
+const linkedinPrompts: string[] = [
+  "Research and create a professional LinkedIn post about industry trends",
+  "Find business insights and create a LinkedIn thought leadership post",
+  "Research market developments and share professional insights on LinkedIn", 
+  "Discover professional trends and create engaging LinkedIn content",
 ];
 
 interface Toolkit {
@@ -213,6 +224,34 @@ interface TwitterPostResult {
   posted: boolean;
   userId?: string;
   tweetData?: any;
+  sources?: string[];
+  researchText?: string;
+}
+
+interface LinkedInPostResult {
+  type: 'linkedin-post-result' | 'linkedin-post-preview' | 'linkedin-post-success';
+  toolCallId?: string;
+  postId?: string;
+  postUrl?: string;
+  content: string;
+  createdAt?: string;
+  timestamp?: number;
+  user?: {
+    id?: string;
+    name?: string;
+    given_name?: string;
+    family_name?: string;
+    email?: string;
+    picture?: string;
+    locale?: {
+      country: string;
+      language: string;
+    };
+  };
+  success?: boolean;
+  posted: boolean;
+  userId?: string;
+  postData?: any;
   sources?: string[];
   researchText?: string;
 }
@@ -378,18 +417,44 @@ function ToolsModalContent({
 }) {
   const [loading, setLoading] = React.useState(false);
 
-  const toggleTwitter = () => {
-    if (selectedTools.includes('TWITTER')) {
-      // Remove Twitter tools
+  const selectTool = (tool: 'TWITTER' | 'LINKEDIN' | 'NONE') => {
+    if (tool === 'NONE') {
       setSelectedTools([]);
     } else {
-      // Add Twitter tools (search tools are added automatically by backend)
-      setSelectedTools(['TWITTER']);
+      setSelectedTools([tool]);
     }
   };
 
   return (
     <div className="space-y-4">
+      {/* None Option */}
+      <div className="border border-gray-200 rounded-lg overflow-hidden">
+        <div className="p-4">
+          <div className="flex items-center space-x-3">
+            <div className="w-8 h-8 bg-gray-500 rounded-lg flex items-center justify-center">
+              <svg width="16" height="16" viewBox="0 0 24 24" fill="white">
+                <path d="M18 6L6 18M6 6l12 12"/>
+              </svg>
+            </div>
+            <div className="flex-1">
+              <h3 className="font-medium text-gray-900">No Social Tools</h3>
+              <p className="text-sm text-gray-500">Use general AI capabilities without social posting</p>
+            </div>
+            <label className="flex items-center">
+              <input
+                type="radio"
+                name="socialTool"
+                checked={selectedTools.length === 0}
+                onChange={() => selectTool('NONE')}
+                className="text-[#aa4673] focus:ring-[#aa4673] mr-2"
+              />
+              <span className="text-sm font-medium text-gray-700">Select</span>
+            </label>
+          </div>
+        </div>
+      </div>
+
+      {/* Twitter Option */}
       <div className="border border-gray-200 rounded-lg overflow-hidden">
         <div className="p-4">
           <div className="flex items-center space-x-3">
@@ -404,12 +469,13 @@ function ToolsModalContent({
             </div>
             <label className="flex items-center">
               <input
-                type="checkbox"
+                type="radio"
+                name="socialTool"
                 checked={selectedTools.includes('TWITTER')}
-                onChange={toggleTwitter}
+                onChange={() => selectTool('TWITTER')}
                 className="text-[#aa4673] focus:ring-[#aa4673] mr-2"
               />
-              <span className="text-sm font-medium text-gray-700">Enable</span>
+              <span className="text-sm font-medium text-gray-700">Select</span>
             </label>
           </div>
           
@@ -425,10 +491,48 @@ function ToolsModalContent({
           )}
         </div>
       </div>
+
+      {/* LinkedIn Tool */}
+      <div className="border border-gray-200 rounded-lg overflow-hidden">
+        <div className="p-4">
+          <div className="flex items-center space-x-3">
+            <div className="w-8 h-8 bg-[#0066cc] rounded-lg flex items-center justify-center">
+              <svg width="16" height="16" viewBox="0 0 24 24" fill="white">
+                <path d="M20.447 20.452h-3.554v-5.569c0-1.328-.027-3.037-1.852-3.037-1.853 0-2.136 1.445-2.136 2.939v5.667H9.351V9h3.414v1.561h.046c.477-.9 1.637-1.85 3.37-1.85 3.601 0 4.267 2.37 4.267 5.455v6.286zM5.337 7.433c-1.144 0-2.063-.926-2.063-2.065 0-1.138.92-2.063 2.063-2.063 1.14 0 2.064.925 2.064 2.063 0 1.139-.925 2.065-2.064 2.065zm1.782 13.019H3.555V9h3.564v11.452zM22.225 0H1.771C.792 0 0 .774 0 1.729v20.542C0 23.227.792 24 1.771 24h20.451C23.2 24 24 23.227 24 22.271V1.729C24 .774 23.2 0 22.222 0h.003z"/>
+              </svg>
+            </div>
+            <div className="flex-1">
+              <h3 className="font-medium text-gray-900">LinkedIn</h3>
+              <p className="text-sm text-gray-500">Research topics and publish professional content to your LinkedIn network</p>
+            </div>
+            <label className="flex items-center">
+              <input
+                type="radio"
+                name="socialTool"
+                checked={selectedTools.includes('LINKEDIN')}
+                onChange={() => selectTool('LINKEDIN')}
+                className="text-[#aa4673] focus:ring-[#aa4673] mr-2"
+              />
+              <span className="text-sm font-medium text-gray-700">Select</span>
+            </label>
+          </div>
+          
+          {selectedTools.includes('LINKEDIN') && (
+            <div className="mt-4 p-3 bg-blue-50 rounded-lg">
+              <p className="text-xs text-blue-800 font-medium">
+                💼 Professional content creation with research and LinkedIn publishing
+              </p>
+              <p className="text-xs text-blue-600 mt-1">
+                When enabled, the AI will research topics and create professional LinkedIn posts suitable for your business network.
+              </p>
+            </div>
+          )}
+        </div>
+      </div>
       
       <div className="p-4 bg-gray-50 rounded-lg">
         <p className="text-xs text-gray-600">
-          <strong>Note:</strong> More tools coming soon! For now, we're focusing on perfecting the X research and posting workflow.
+          <strong>Note:</strong> More tools coming soon! Currently supporting X.com and LinkedIn research and posting workflows.
         </p>
       </div>
     </div>
@@ -456,7 +560,9 @@ export default function Home() {
   const [isToolsModalOpen, setIsToolsModalOpen] = React.useState(false);
   const [selectedTools, setSelectedTools] = React.useState<string[]>([]);
   const [isTwitterAuthenticated, setIsTwitterAuthenticated] = React.useState(false);
+  const [activePromptTab, setActivePromptTab] = React.useState<'twitter' | 'linkedin'>('twitter');
   const { getUserId } = useTwitterStore();
+  const { getUserId: getLinkedInUserId, getAuthorId: getLinkedInAuthorId } = useLinkedInStore();
 
   const modelOptions = React.useMemo(
     () => [
@@ -612,6 +718,67 @@ export default function Home() {
       throw error;
     }
   };
+
+  // Handle posting a LinkedIn post after preview
+  const handlePostLinkedIn = async (content: string, userId: string) => {
+    try {
+      // Get author ID from LinkedIn store
+      const authorId = getLinkedInAuthorId();
+      
+      if (!authorId) {
+        throw new Error('LinkedIn author ID not found. Please reconnect your LinkedIn account.');
+      }
+      
+      const response = await fetch('/api/linkedin/post', {
+        method: 'POST',
+        headers: { 'content-type': 'application/json' },
+        body: JSON.stringify({ content, userId, authorId })
+      });
+      
+      const result = await response.json();
+      
+      console.log('Post LinkedIn result:', result);
+      
+      if (!result.success) {
+        throw new Error(result.error || 'Failed to post to LinkedIn');
+      }
+      
+      // Update the message to show the posted LinkedIn post
+      setThreads((prev) => prev.map((thread) => {
+        if (thread.id !== activeThread.id) return thread;
+        
+        return {
+          ...thread,
+          messages: thread.messages.map((message) => {
+            if (message.role !== 'assistant' || !message.linkedinPosts) return message;
+            
+            return {
+              ...message,
+              linkedinPosts: message.linkedinPosts.map((post) => {
+                if (post.content === content && !post.posted) {
+                  // Convert preview to posted with all the returned data
+                  const updatedPost = {
+                    ...post, // Keep original preview data including user info
+                    ...result.linkedinData, // Override with API response data
+                    posted: true,
+                    user: post.user // Preserve the original user data
+                  } as LinkedInPostResult;
+                  
+                  console.log('Updated LinkedIn post data:', updatedPost);
+                  return updatedPost;
+                }
+                return post;
+              })
+            };
+          })
+        };
+      }));
+      
+    } catch (error) {
+      console.error('Error posting to LinkedIn:', error);
+      throw error;
+    }
+  };
   
   async function sendMessage(text: string, retryFromMessage?: ChatMessage) {
     if (!text.trim()) return;
@@ -653,7 +820,7 @@ export default function Home() {
           model: selectedModel,
           messages: [...targetMessages, userMsg],
           tools: selectedTools,
-          userId: getUserId(), // Include user ID for Composio tools
+          userId: selectedTools.includes('LINKEDIN') ? getLinkedInUserId() : getUserId(), // Include appropriate user ID for selected tools
         }),
       });
 
@@ -663,8 +830,9 @@ export default function Home() {
       // Handle text response for both Twitter and non-Twitter requests
       const fullText = await res.text();
       
-      // Parse Twitter post data from response
+      // Parse Twitter and LinkedIn post data from response
       let twitterPosts: TwitterPostResult[] = [];
+      let linkedinPosts: LinkedInPostResult[] = [];
       let cleanContent = fullText;
       
       // Parse published Twitter posts
@@ -710,12 +878,49 @@ export default function Home() {
           console.error('Error parsing Twitter preview:', e, match[1]);
         }
       }
+
+      // Parse LinkedIn preview posts
+      const linkedinPreviewMatches = fullText.matchAll(/__LINKEDIN_PREVIEW__(.*?)__LINKEDIN_PREVIEW__/g);
+      
+      for (const match of linkedinPreviewMatches) {
+        try {
+          console.log('Found LinkedIn preview match:', match[1]);
+          const linkedinPreview = JSON.parse(match[1]) as LinkedInPostResult;
+          console.log('Parsed LinkedIn preview:', linkedinPreview);
+          
+          // Extract sources from LinkedIn preview data
+          if (linkedinPreview.sources && linkedinPreview.sources.length > 0) {
+            extractedSources = linkedinPreview.sources;
+            console.log('Extracted sources from LinkedIn preview data:', extractedSources);
+          }
+          
+          // Extract research text from LinkedIn preview data
+          if (linkedinPreview.researchText) {
+            extractedResearchText = linkedinPreview.researchText;
+            console.log('Extracted research text from LinkedIn preview data');
+          }
+          
+          // Add LinkedIn user profile data from store
+          const linkedinUser = getLinkedInUserId(); // Get the current LinkedIn user
+          const linkedinStore = useLinkedInStore.getState();
+          if (linkedinStore.user) {
+            linkedinPreview.user = linkedinStore.user;
+            console.log('Added LinkedIn user data to preview:', linkedinStore.user);
+          }
+          
+          linkedinPosts.push(linkedinPreview);
+          cleanContent = cleanContent.replace(match[0], '');
+        } catch (e) {
+          console.error('Error parsing LinkedIn preview:', e, match[1]);
+        }
+      }
       
       const botMsg: ChatMessage = { 
         id: crypto.randomUUID(), 
         role: "assistant", 
         content: cleanContent.trim(),
         twitterPosts: twitterPosts.length > 0 ? twitterPosts : undefined,
+        linkedinPosts: linkedinPosts.length > 0 ? linkedinPosts : undefined,
         sources: extractedSources.length > 0 ? extractedSources : undefined,
         researchText: extractedResearchText,
         model: selectedModel,
@@ -805,16 +1010,59 @@ export default function Home() {
             <h1 className="text-2xl font-semibold font-weight-600 tracking-tight sm:text-[30px] pb-6 pt-12 justify-left text-[#4e2a58]">How can I help you?</h1>
 
             {activeThread?.messages.length === 0 && (
-              <div className="mx-auto mt-4 w-full max-w-2xl divide-y divide-rose-100 overflow-hidden rounded-2xl text-left pt-1">
-                {twitterPrompts.map((prompt: string) => (
+              <div className="mx-auto mt-4 w-full max-w-2xl">
+                {/* Tabs */}
+                <div className="mb-4 flex rounded-lg border border-rose-100 bg-white p-1">
                   <button
-                    key={prompt}
-                    onClick={() => onSuggestionClick(prompt)}
-                    className="block w-full px-5 py-3 text-left text-rose-900/90 transition hover:bg-[#ed78c6]/20 text-font-10px"
+                    onClick={() => setActivePromptTab('twitter')}
+                    className={`flex flex-1 items-center justify-center gap-2 rounded-md px-3 py-2 text-sm font-medium transition ${
+                      activePromptTab === 'twitter'
+                        ? 'bg-rose-100 text-rose-900'
+                        : 'text-rose-600 hover:text-rose-900'
+                    }`}
                   >
-                    {prompt}
+                    <svg width="16" height="16" viewBox="0 0 24 24" fill="currentColor">
+                      <path d="M18.244 2.25h3.308l-7.227 8.26 8.502 11.24H16.17l-5.214-6.817L4.99 21.75H1.68l7.73-8.835L1.254 2.25H8.08l4.713 6.231zm-1.161 17.52h1.833L7.084 4.126H5.117z"/>
+                    </svg>
+                    X.com
                   </button>
-                ))}
+                  <button
+                    onClick={() => setActivePromptTab('linkedin')}
+                    className={`flex flex-1 items-center justify-center gap-2 rounded-md px-3 py-2 text-sm font-medium transition ${
+                      activePromptTab === 'linkedin'
+                        ? 'bg-rose-100 text-rose-900'
+                        : 'text-rose-600 hover:text-rose-900'
+                    }`}
+                  >
+                    <svg width="16" height="16" viewBox="0 0 24 24" fill="currentColor">
+                      <path d="M20.447 20.452h-3.554v-5.569c0-1.328-.027-3.037-1.852-3.037-1.853 0-2.136 1.445-2.136 2.939v5.667H9.351V9h3.414v1.561h.046c.477-.9 1.637-1.85 3.37-1.85 3.601 0 4.267 2.37 4.267 5.455v6.286zM5.337 7.433c-1.144 0-2.063-.926-2.063-2.065 0-1.138.92-2.063 2.063-2.063 1.14 0 2.064.925 2.064 2.063 0 1.139-.925 2.065-2.064 2.065zm1.782 13.019H3.555V9h3.564v11.452zM22.225 0H1.771C.792 0 0 .774 0 1.729v20.542C0 23.227.792 24 1.771 24h20.451C23.2 24 24 23.227 24 22.271V1.729C24 .774 23.2 0 22.222 0h.003z"/>
+                    </svg>
+                    LinkedIn
+                  </button>
+                </div>
+
+                {/* Prompts */}
+                <div className="divide-y divide-rose-100 overflow-hidden rounded-2xl text-left">
+                  {activePromptTab === 'twitter' && twitterPrompts.map((prompt: string) => (
+                    <button
+                      key={prompt}
+                      onClick={() => onSuggestionClick(prompt)}
+                      className="block w-full px-5 py-3 text-left text-rose-900/90 transition hover:bg-[#ed78c6]/20 text-font-10px"
+                    >
+                      {prompt}
+                    </button>
+                  ))}
+                  
+                  {activePromptTab === 'linkedin' && linkedinPrompts.map((prompt: string) => (
+                    <button
+                      key={prompt}
+                      onClick={() => onSuggestionClick(prompt)}
+                      className="block w-full px-5 py-3 text-left text-rose-900/90 transition hover:bg-[#ed78c6]/20 text-font-10px"
+                    >
+                      {prompt}
+                    </button>
+                  ))}
+                </div>
               </div>
             )}
           </section>
@@ -843,8 +1091,8 @@ export default function Home() {
                     )}
                     
                     {/* Message content */}
-                    {/* Twitter workflow - Show static layout */}
-                    {m.role === "assistant" && m.twitterPosts && m.twitterPosts.length > 0 ? (
+                    {/* Social media workflow - Show static layout */}
+                    {m.role === "assistant" && ((m.twitterPosts && m.twitterPosts.length > 0) || (m.linkedinPosts && m.linkedinPosts.length > 0)) ? (
                       <div className="w-full space-y-4">
                         {/* Step 1: Searching */}
                         <div className="bg-[#fdf7fd] text-rose-900 rounded-2xl px-4 py-3">
@@ -989,13 +1237,25 @@ export default function Home() {
                       </div>
                     )}
                     
-                    {/* Twitter workflow: Step 3 - Generating tweet */}
-                    {m.role === "assistant" && m.twitterPosts && m.twitterPosts.length > 0 && (
+                    {/* Social media workflow: Step 3 - Generating content */}
+                    {m.role === "assistant" && (m.twitterPosts && m.twitterPosts.length > 0) && (
                       <div className="mt-4">
                         <div className="bg-[#fdf7fd] text-rose-900 rounded-2xl px-4 py-3">
                           <div className="flex items-center gap-2">
                             <span>💭</span>
                             <span>Generating tweet based on findings...</span>
+                          </div>
+                        </div>
+                      </div>
+                    )}
+                    
+                    {/* LinkedIn workflow: Step 3 - Generating post */}
+                    {m.role === "assistant" && (m.linkedinPosts && m.linkedinPosts.length > 0) && (
+                      <div className="mt-4">
+                        <div className="bg-[#fdf7fd] text-rose-900 rounded-2xl px-4 py-3">
+                          <div className="flex items-center gap-2">
+                            <span>💼</span>
+                            <span>Creating professional LinkedIn post based on research...</span>
                           </div>
                         </div>
                       </div>
@@ -1009,6 +1269,19 @@ export default function Home() {
                             key={twitterPost.toolCallId || `preview-${index}`}
                             postData={twitterPost}
                             onPost={!twitterPost.posted ? handlePostTweet : undefined}
+                          />
+                        ))}
+                      </div>
+                    )}
+                    
+                    {/* LinkedIn post cards (only for assistant messages) - After message content, before actions */}
+                    {m.role === "assistant" && m.linkedinPosts && m.linkedinPosts.length > 0 && (
+                      <div className="mt-3 w-full">
+                        {m.linkedinPosts.map((linkedinPost, index) => (
+                          <LinkedInPostCard 
+                            key={linkedinPost.toolCallId || `linkedin-preview-${index}`}
+                            postData={linkedinPost}
+                            onPost={!linkedinPost.posted ? handlePostLinkedIn : undefined}
                           />
                         ))}
                       </div>
@@ -1110,10 +1383,13 @@ export default function Home() {
                       Tools {selectedTools.length > 0 && `(${selectedTools.length})`}
                     </button>
                     
-                    {/* Twitter Status */}
-                    <div className="ml-2">
+                    {/* Social Media Status */}
+                    <div className="ml-2 flex items-center gap-4">
                       <TwitterStatus 
                         onAuthChange={setIsTwitterAuthenticated}
+                        className="text-xs"
+                      />
+                      <LinkedInStatus 
                         className="text-xs"
                       />
                     </div>

@@ -80,8 +80,9 @@ export async function POST(req: Request) {
     const model = resolveModel(selectedModel);
     const composioUserId = userId || "ca_VYRbOnfLPnef";
     
-    // Check if Twitter tools are selected
+    // Check if Twitter or LinkedIn tools are selected
     const hasTwitterTools = selectedTools?.some(tool => tool.includes('TWITTER')) || false;
+    const hasLinkedInTools = selectedTools?.some(tool => tool.includes('LINKEDIN')) || false;
     
     if (hasTwitterTools && process.env.COMPOSIO_API_KEY) {
       console.log("Starting Twitter workflow with two agents");
@@ -168,6 +169,101 @@ Search for the most recent and relevant information about the user's topic and p
       
       // Return only the preview card data
       const responseWithCard = `__TWITTER_PREVIEW__${JSON.stringify(twitterPreviewData)}__TWITTER_PREVIEW__`;
+      
+      return new Response(responseWithCard, {
+        headers: { "content-type": "text/plain; charset=utf-8" },
+      });
+    }
+    
+    if (hasLinkedInTools && process.env.COMPOSIO_API_KEY) {
+      console.log("Starting LinkedIn workflow with two agents");
+      
+      // AGENT 1: Research Agent - Web Search
+      console.log("Starting Agent 1: Web Research for LinkedIn");
+      
+      const researchResult = await generateText({
+        model,
+        messages: msgs.map(m => ({ role: m.role, content: m.content })),
+        tools: {
+          web_search_preview: openai.tools.webSearchPreview({
+            searchContextSize: 'low',
+          }),
+        },
+        toolChoice: { type: 'tool', toolName: 'web_search_preview' },
+        system: `You are a professional research agent specializing in LinkedIn content. Your job is to search the web for current, business-relevant information about the user's topic.
+
+<task>
+Search for the most recent and relevant professional information about the user's topic and provide a comprehensive research summary suitable for LinkedIn's business-focused audience.
+</task>
+
+<requirements>
+- Use web search to find current information in ${new Date().getFullYear()}
+- Focus on business insights, industry trends, and professional developments
+- Provide a comprehensive research summary with professional relevance
+- Emphasize thought leadership angles and business implications
+- Include data, statistics, and credible sources when available
+</requirements>`,
+      });
+      
+      console.log("Agent 1 completed. Research findings for LinkedIn:", researchResult.text);
+      console.log("Research sources:", researchResult.sources);
+      
+      // AGENT 2: Synthesis Agent - Generate LinkedIn Post
+      console.log("Starting Agent 2: LinkedIn Post Generation");
+      
+      const linkedinResult = await generateText({
+        model,
+        messages: [
+          {
+            role: "system",
+            content: `You are a professional LinkedIn post synthesis agent. Create a thoughtful, professional LinkedIn post based on research findings.
+
+<requirements>
+- Write in a professional, thought-leadership tone suitable for LinkedIn
+- Focus on business insights, industry trends, or professional development
+- Use professional language that engages business professionals
+- Include actionable insights or thought-provoking questions
+- Keep it engaging but maintain professionalism throughout
+- Aim for 1-3 paragraphs that provide value to professional networks
+- IMPORTANT: Use proper paragraph spacing with double line breaks (\n\n) between paragraphs for better readability
+- Structure your content with clear paragraph breaks to avoid dense, hard-to-read text
+- Return the content in the following format: "LINKEDIN_CONTENT: [generated content]"
+</requirements>`
+          },
+          {
+            role: "user", 
+            content: `Based on this research about "${msgs[msgs.length - 1]?.content}", create a professional LinkedIn post:\n\nRESEARCH FINDINGS:\n${researchResult.text}`
+          }
+        ],
+      });
+      
+      console.log("Agent 2 completed. LinkedIn post generation:", linkedinResult.text);
+      
+      // Extract LinkedIn content from Agent 2
+      const linkedinMatch = linkedinResult.text.match(/LINKEDIN_CONTENT:\s*([\s\S]+?)(?:\n\n|$)/);
+      const linkedinContent = linkedinMatch ? linkedinMatch[1].trim() : linkedinResult.text;
+      
+      // Use sources from Agent 1 (research)
+      const sources = researchResult.sources || [];
+      
+      console.log("Final LinkedIn content:", linkedinContent);
+      console.log("Final sources:", sources);
+      
+      // Create preview card data with real sources
+      const linkedinPreviewData = {
+        type: 'linkedin-post-preview',
+        content: linkedinContent,
+        userId: composioUserId,
+        timestamp: Date.now(),
+        posted: false,
+        sources: sources,
+        researchText: researchResult.text
+      };
+      
+      console.log('Created LinkedIn preview data:', linkedinPreviewData);
+      
+      // Return only the preview card data
+      const responseWithCard = `__LINKEDIN_PREVIEW__${JSON.stringify(linkedinPreviewData)}__LINKEDIN_PREVIEW__`;
       
       return new Response(responseWithCard, {
         headers: { "content-type": "text/plain; charset=utf-8" },

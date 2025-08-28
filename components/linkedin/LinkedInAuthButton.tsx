@@ -1,17 +1,17 @@
 "use client";
 
 import React from "react";
-import { useTwitterStore } from '../../store/twitterStore';
+import { useLinkedInStore } from '../../store/linkedinStore';
 
-interface TwitterAuthButtonProps {
+interface LinkedInAuthButtonProps {
   onAuthComplete?: () => void;
   className?: string;
 }
 
-function IconTwitter() {
+function IconLinkedIn() {
   return (
     <svg width="16" height="16" viewBox="0 0 24 24" fill="currentColor">
-      <path d="M18.244 2.25h3.308l-7.227 8.26 8.502 11.24H16.17l-5.214-6.817L4.99 21.75H1.68l7.73-8.835L1.254 2.25H8.08l4.713 6.231zm-1.161 17.52h1.833L7.084 4.126H5.117z"/>
+      <path d="M20.447 20.452h-3.554v-5.569c0-1.328-.027-3.037-1.852-3.037-1.853 0-2.136 1.445-2.136 2.939v5.667H9.351V9h3.414v1.561h.046c.477-.9 1.637-1.85 3.37-1.85 3.601 0 4.267 2.37 4.267 5.455v6.286zM5.337 7.433c-1.144 0-2.063-.926-2.063-2.065 0-1.138.92-2.063 2.063-2.063 1.14 0 2.064.925 2.064 2.063 0 1.139-.925 2.065-2.064 2.065zm1.782 13.019H3.555V9h3.564v11.452zM22.225 0H1.771C.792 0 0 .774 0 1.729v20.542C0 23.227.792 24 1.771 24h20.451C23.2 24 24 23.227 24 22.271V1.729C24 .774 23.2 0 22.222 0h.003z"/>
     </svg>
   );
 }
@@ -26,10 +26,10 @@ function IconExternalLink() {
   );
 }
 
-export default function TwitterAuthButton({ onAuthComplete, className = "" }: TwitterAuthButtonProps) {
+export default function LinkedInAuthButton({ onAuthComplete, className = "" }: LinkedInAuthButtonProps) {
   const [isLoading, setIsLoading] = React.useState(false);
   const [error, setError] = React.useState<string | null>(null);
-  const { getUserId, setAuthenticated, setUnauthenticated } = useTwitterStore();
+  const { getUserId, setAuthenticated, setUnauthenticated } = useLinkedInStore();
 
   const handleAuth = async () => {
     setIsLoading(true);
@@ -38,7 +38,7 @@ export default function TwitterAuthButton({ onAuthComplete, className = "" }: Tw
     try {
       // Get consistent user ID from store
       const user_id = getUserId();
-      const response = await fetch('/api/twitter/auth', {
+      const response = await fetch('/api/linkedin/auth', {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
@@ -58,15 +58,15 @@ export default function TwitterAuthButton({ onAuthComplete, className = "" }: Tw
         // Store connection ID for status checks
         const connectionId = data.connectionId;
         
-        // Open Twitter authentication in a new window
+        // Open LinkedIn authentication in a new window
         const authWindow = window.open(
           data.authUrl,
-          'twitter-auth',
+          'linkedin-auth',
           'width=600,height=700,scrollbars=yes,resizable=yes'
         );
 
         if (!authWindow) {
-          throw new Error('Please allow popups to authenticate with Twitter');
+          throw new Error('Please allow popups to authenticate with LinkedIn');
         }
 
         // Listen for authentication completion
@@ -87,7 +87,7 @@ export default function TwitterAuthButton({ onAuthComplete, className = "" }: Tw
           }
           
           try {
-            const statusResponse = await fetch(`/api/twitter/status?connectionId=${connectionId}`);
+            const statusResponse = await fetch(`/api/linkedin/status?connectionId=${connectionId}`);
             const statusData = await statusResponse.json();
             
             if (statusData.authenticated) {
@@ -107,7 +107,7 @@ export default function TwitterAuthButton({ onAuthComplete, className = "" }: Tw
 
         // Also listen for messages from the auth window
         const messageListener = (event: MessageEvent) => {
-          if (event.origin === window.location.origin && event.data.type === 'twitter-auth-success') {
+          if (event.origin === window.location.origin && event.data.type === 'linkedin-auth-success') {
             clearInterval(checkClosed);
             authWindow.close();
             window.removeEventListener('message', messageListener);
@@ -137,7 +137,7 @@ export default function TwitterAuthButton({ onAuthComplete, className = "" }: Tw
       
       queryParams.append('userId', user_id);
       
-      const response = await fetch(`/api/twitter/status?${queryParams.toString()}`);
+      const response = await fetch(`/api/linkedin/status?${queryParams.toString()}`);
       const data = await response.json();
       
       if (data.authenticated) {
@@ -158,15 +158,15 @@ export default function TwitterAuthButton({ onAuthComplete, className = "" }: Tw
       <button
         onClick={handleAuth}
         disabled={isLoading}
-        className={`inline-flex items-center gap-2 rounded-lg bg-black px-4 py-2 text-sm font-medium text-white transition hover:bg-gray-800 disabled:opacity-50 disabled:cursor-not-allowed ${className}`}
+        className={`inline-flex items-center gap-2 rounded-lg bg-[#0066cc] px-4 py-2 text-sm font-medium text-white transition hover:bg-[#0052a3] disabled:opacity-50 disabled:cursor-not-allowed ${className}`}
       >
-        <IconTwitter />
-        {isLoading ? 'Connecting...' : 'Connect X'}
+        <IconLinkedIn />
+        {isLoading ? 'Connecting...' : 'Connect LinkedIn'}
         <IconExternalLink />
       </button>
       
       {error && (
-        <div className="text-sm text-red-600 bg-red-50 px-3 py-2 rounded-lg border border-red-200">
+       <div className="text-xm text-red-600 px-3 py-2">
           {error}
         </div>
       )}

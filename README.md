@@ -1,20 +1,20 @@
 # Lazy Posts
 
-🚀 **Blazingly Fast Twitter Automation** - Built on the popular T3Chat framework, Lazy Posts automates research, generation, and posting of tweets on X (formerly Twitter).
+🚀 **Blazingly Fast Social Media Automation** - Built on the popular T3Chat framework, Lazy Posts automates research, generation, and posting of content to X (formerly Twitter) and LinkedIn.
 
 ## 🎯 What is Lazy Posts?
 
-Lazy Posts transforms the T3Chat interface into a powerful Twitter automation tool. Simply ask for a topic and watch as intelligent agents:
+Lazy Posts transforms the T3Chat interface into a powerful social media automation tool. Simply ask for a topic and watch as intelligent agents:
 1. **Research** current information using web search
-2. **Generate** opinionated, engaging tweets based on findings
-3. **Preview** tweets in authentic Twitter-style cards
-4. **Post** to your X account with one click
+2. **Generate** platform-specific content (opinionated tweets for X, professional posts for LinkedIn)
+3. **Preview** content in authentic platform-style cards
+4. **Post** to your chosen social platform with one click
 
 ## ✨ Key Features
 
 ### 🤖 **Two-Agent Architecture**
-- **Research Agent**: Uses OpenAI's web search to gather current information
-- **Synthesis Agent**: Creates opinionated, engaging tweets from research findings
+- **Research Agent**: Uses OpenAI's web search to gather current, platform-relevant information
+- **Synthesis Agent**: Creates platform-specific content (opinionated tweets for X, professional posts for LinkedIn)
 
 ### 🔍 **Smart Research**
 - Real-time web search integration
@@ -22,10 +22,12 @@ Lazy Posts transforms the T3Chat interface into a powerful Twitter automation to
 - Expandable research findings accordion
 - No more outdated information in your tweets
 
-### 📱 **Twitter-Native Experience**
-- Authentic Twitter post cards for previews
-- Preview-then-post workflow for safety
-- "Post to Twitter" → "View on X" button transition
+### 📱 **Platform-Native Experience**
+- **X/Twitter**: Authentic Twitter post cards with opinionated, engaging content
+- **LinkedIn**: Professional post cards with thought-leadership content and proper paragraph spacing
+- Preview-then-post workflow for safety across both platforms
+- "Post to Platform" → "View on Platform" button transitions
+- Direct post URLs with correct URN formatting for LinkedIn
 - Source links displayed as verification chips
 
 ### 🛠️ **Built on T3Chat**
@@ -38,59 +40,50 @@ Lazy Posts transforms the T3Chat interface into a powerful Twitter automation to
 
 ```mermaid
 graph TD
-    A[User Request] --> B[Tool Selection Check]
-    B -->|Twitter Enabled| C[Two-Agent Workflow]
-    B -->|Standard Chat| D[Regular AI Response]
+    A[User Request] --> B[Platform Selection]
+    B -->|X/Twitter| C[Twitter Workflow]
+    B -->|LinkedIn| D[LinkedIn Workflow]
+    B -->|No Social Tools| E[Standard Chat]
     
-    C --> E[Agent 1: Research Agent]
-    E --> F[OpenAI Web Search]
-    F --> G[Extract Sources & Findings]
+    C --> F[Research → Generate → Preview → Post]
+    D --> G[Research → Generate → Preview → Post]
     
-    G --> H[Agent 2: Synthesis Agent]
-    H --> I[Generate Opinionated Tweet]
-    I --> J[Create Preview Data]
+    F --> H[✅ Posted to X]
+    G --> I[✅ Posted to LinkedIn]
     
-    J --> K[Frontend Static Layout]
-    K --> L[🔍 Searching...]
-    L --> M[📊 Research Complete]
-    M --> N[🔍 Research Accordion]
-    N --> O[Sources Chips]
-    O --> P[💭 Generating Tweet...]
-    P --> Q[Twitter Preview Card]
-    
-    Q --> R[User Clicks Post]
-    R --> S[Composio Twitter API]
-    S --> T[✅ Posted to X]
-    
-    style C fill:#e1f5fe
-    style E fill:#f3e5f5
-    style H fill:#f3e5f5
-    style K fill:#e8f5e8
+    style C fill:#1da1f2
+    style D fill:#0066cc
+    style F fill:#e1f5fe
+    style G fill:#e8f5e8
 ```
 
 ### Agent Orchestration
 
-**Agent 1 - Research Agent**
+**Agent 1 - Research Agent (Platform-Aware)**
 ```typescript
-const researchResult = await generateText({
-  model,
-  tools: {
-    web_search_preview: openai.tools.webSearchPreview()
-  },
-  toolChoice: { type: 'tool', toolName: 'web_search_preview' },
+// Twitter Research - Focus on trends and viral content
+const twitterResearch = await generateText({
+  tools: { web_search_preview: openai.tools.webSearchPreview() },
   system: "Research agent for current information gathering"
+});
+
+// LinkedIn Research - Focus on business insights
+const linkedinResearch = await generateText({
+  tools: { web_search_preview: openai.tools.webSearchPreview() },
+  system: "Professional research agent specializing in LinkedIn content"
 });
 ```
 
-**Agent 2 - Synthesis Agent**
+**Agent 2 - Platform-Specific Synthesis**
 ```typescript
-const tweetResult = await generateText({
-  model,
-  system: "Create opinionated Twitter post based on research findings",
-  messages: [{
-    role: "user",
-    content: `RESEARCH FINDINGS:\n${researchResult.text}`
-  }]
+// Twitter Synthesis - Opinionated & Engaging
+const twitterPost = await generateText({
+  system: "Create opinionated Twitter post, under 280 chars, no hashtags"
+});
+
+// LinkedIn Synthesis - Professional & Thought Leadership
+const linkedinPost = await generateText({
+  system: "Create professional LinkedIn post with proper paragraph spacing (\\n\\n)"
 });
 ```
 
@@ -100,8 +93,9 @@ const tweetResult = await generateText({
 
 - Node.js 18+
 - OpenAI API key (for web search and synthesis)
-- Composio API key (for Twitter integration)
-- Twitter OAuth app configured in Composio
+- Composio API key (for social media integrations)
+- Twitter OAuth app configured in Composio (for X integration)
+- LinkedIn OAuth app configured in Composio (for LinkedIn integration)
 
 ### Installation
 
@@ -125,8 +119,12 @@ Edit `.env.local`:
 ```bash
 # Required for core functionality
 OPENAI_API_KEY=your_openai_key
-COMPOSIO_API_KEY=your_composio_key
-COMPOSIO_AUTH_CONFIG_ID=your_composio_config_auth_id
+
+# Social Media Integration
+COMPOSIO_API_KEY=your_composio_key           # For Twitter/X
+COMPOSIO_AUTH_CONFIG_ID=your_twitter_config  # Twitter OAuth config
+COMPOSIO_LINKEDIN_API_KEY=your_composio_key  # For LinkedIn  
+LINKEDIN_AUTH_CONFIG_ID=your_linkedin_config # LinkedIn OAuth config
 
 # Optional: Additional AI providers
 ANTHROPIC_API_KEY=your_anthropic_key
@@ -134,10 +132,11 @@ GOOGLE_GENERATIVE_AI_API_KEY=your_google_key
 GROQ_API_KEY=your_groq_key
 ```
 
-4. **Configure Twitter OAuth in Composio**:
+4. **Configure Social Media OAuth in Composio**:
    - Visit [Composio Dashboard](https://app.composio.dev)
-   - Set up Twitter integration with OAuth
-   - Copy your API key to `.env.local`
+   - Set up Twitter integration with OAuth (for X/Twitter posting)
+   - Set up LinkedIn integration with OAuth (for LinkedIn posting) 
+   - Copy your API keys and config IDs to `.env.local`
 
 5. **Run the development server**:
 ```bash
@@ -148,17 +147,33 @@ npm run dev
 
 ## ⚡ Usage
 
-1. **Enable Twitter Tools**: Click the tools icon and enable "X.com"
-2. **Authenticate**: Connect your Twitter account via OAuth
-3. **Request a Tweet**: Type something like "Research AI trends and create a tweet"
-4. **Review**: Watch the research process and preview the generated tweet
-5. **Post**: Click "Post to Twitter" to publish, then "View on X" to see it live
+### Single-Platform Selection (Radio Button Design)
+1. **Choose Your Platform**: Click the tools icon and select either:
+   - **"X.com"** for Twitter/X posting with opinionated, engaging content
+   - **"LinkedIn"** for professional networking with thought-leadership posts  
+   - **"No Social Tools"** for regular AI chat without posting
+
+2. **Authenticate**: Connect your chosen platform account via OAuth
+
+3. **Request Content**: Type platform-appropriate requests:
+   - **For X**: "Research AI trends and create a tweet" 
+   - **For LinkedIn**: "Research market trends and create a professional LinkedIn post"
+
+4. **Review**: Watch the research process and preview the generated content
+
+5. **Post**: Click "Publish to [Platform]" to publish, then "View on [Platform]" to see it live
 
 ### Example Prompts
-- "Research the latest developments in AI and post to Twitter"
-- "Find current space exploration news and create an engaging tweet"
-- "Look up recent climate change data and tweet about it"
-- "Research cryptocurrency trends and post an opinionated take"
+
+**For X/Twitter** (Opinionated & Engaging):
+- "Research the latest AI developments and create a provocative tweet"
+- "Find space exploration news and post an opinionated take to Twitter"
+- "Look up climate change data and create an engaging tweet"
+
+**For LinkedIn** (Professional & Thought Leadership):
+- "Research industry AI trends and create a professional LinkedIn post"
+- "Find business insights about remote work and share on LinkedIn"
+- "Research market developments and create thought-leadership content"
 
 ## 🛠️ Model Compatibility
 
@@ -189,9 +204,11 @@ npm run dev
 
 ### Key Components
 - `TwitterPostCard.tsx` - Authentic Twitter-style preview cards
-- `TwitterStatus.tsx` - OAuth authentication flow
-- `/api/chat/route.ts` - Two-agent orchestration
-- `/api/twitter/post/route.ts` - Tweet publishing endpoint
+- `LinkedInPostCard.tsx` - Professional LinkedIn-style preview cards with user profile data
+- `TwitterStatus.tsx` / `LinkedInStatus.tsx` - Platform-specific OAuth flows
+- `/api/chat/route.ts` - Platform-aware two-agent orchestration
+- `/api/twitter/post/route.ts` - Tweet publishing with X.com URLs
+- `/api/linkedin/post/route.ts` - LinkedIn publishing with urn:li:share URLs
 
 ## 🐛 Troubleshooting
 
@@ -202,15 +219,33 @@ npm run dev
 - Try GPT-4o-mini or GPT-4.1-mini for best results
 - Check console logs for tool execution traces
 
-**Twitter authentication failing?**
-- Verify Composio Twitter app configuration
+**Social media authentication failing?**
+- **Twitter**: Verify Composio Twitter app configuration and COMPOSIO_API_KEY
+- **LinkedIn**: Verify LinkedIn OAuth setup and COMPOSIO_LINKEDIN_API_KEY  
 - Check OAuth redirect URLs match your domain
-- Ensure API keys are correctly set
+- Ensure all API keys and config IDs are correctly set
+- Try single-platform selection to avoid user ID conflicts
 
 **Sources not appearing?**
 - Verify OpenAI API key has access to web search
 - Check browser console for source extraction logs
 - Try with a different model if issues persist
+
+## 🆕 Latest Updates
+
+### LinkedIn Integration (v2.0)
+- ✅ **Professional Content Generation**: AI creates thought-leadership posts suitable for business networks
+- ✅ **Proper Paragraph Spacing**: Content includes double line breaks (\n\n) for better readability  
+- ✅ **User Profile Integration**: LinkedIn posts display actual user name, email, and profile picture
+- ✅ **Correct Post URLs**: Proper `urn:li:share:` format for direct LinkedIn post links
+- ✅ **Single-Platform Selection**: Radio button design prevents user ID conflicts between platforms
+- ✅ **Business-Focused Research**: LinkedIn research agent focuses on industry trends and professional insights
+
+### Architecture Improvements
+- ✅ **Platform-Aware Agents**: Different system prompts for X (opinionated) vs LinkedIn (professional)
+- ✅ **User ID Routing**: Correct authentication context based on selected platform
+- ✅ **Enhanced Error Handling**: Better debugging and API response parsing
+- ✅ **TypeScript Safety**: Full type safety across LinkedIn integration components
 
 ## 📊 Available Scripts
 
